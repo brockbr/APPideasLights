@@ -10,7 +10,7 @@
 /**
  * A sketch to control two strings of RGBW LED lights from one ESP8266.
  * 
- * This creates its own wireless access point with an SSID beginning with "appideas-"
+ * This creates its own wireless access point with an SSID beginning with "b2prototech-"
  *   that you need to connect to for configuring this device to connect to your network
  *   
  * For complete assembly and usage information, visit this Instructable:
@@ -21,7 +21,7 @@
  */
 
 // Setup a wireless access point so the user can be prompted to connect to a network
-String  ssidPrefix = "appideas-";
+String  ssidPrefix = "b2prototech-";
 int serverPort = 5050;
 String ssid = "";
 String softIP  = "";
@@ -156,7 +156,7 @@ void setup()
 }
 
 /**
- * Whether or not we have stored network credentials. Will return false of the stored SSID is "appideas-changeme"
+ * Whether or not we have stored network credentials. Will return false of the stored SSID is "b2prototech-changeme"
  * 
  * @return bool
  * @author costmo
@@ -169,7 +169,7 @@ bool haveNetworkCredentials()
   // < 2 to catch empty string
   if( deviceSettings.ssid == NULL || 
       sizeof( deviceSettings.ssid ) < 2 || 
-      String( deviceSettings.ssid ).equals( "appideas-changeme" ) )
+      String( deviceSettings.ssid ).equals( "b2prototech-changeme" ) )
   {
     return false; 
   }
@@ -328,11 +328,12 @@ void handleRoot()
 void handleRollCall()
 {
   String sendValue = "";
-  StaticJsonBuffer<1024> jsonBuffer;
-  JsonObject& root = jsonBuffer.createObject();
-  root["status"] = "present";
-  root["mac"] = WiFi.macAddress();
-  root.printTo( sendValue );
+  StaticJsonDocument<1024> doc;
+
+  doc["status"] = "present";
+  doc["mac"] = WiFi.macAddress();
+  
+  serializeJson(doc, sendValue);
   
   server.send( 200, "text/html", sendValue );
 }
@@ -350,10 +351,10 @@ void handleRollCall()
 void sendBlank()
 {
   String sendValue = "";
-  StaticJsonBuffer<32> jsonBuffer;
-  JsonObject& root = jsonBuffer.createObject();
-  root[""] = "";
-  root.printTo( sendValue );
+  StaticJsonDocument<32> doc;
+  doc[""] = "";
+
+  serializeJson(doc, sendValue);
   
   server.send( 200, "text/html", sendValue );
 }
@@ -414,7 +415,7 @@ void startSoftAP()
   String mac = WiFi.macAddress();
   String macPartOne = mac.substring( 12, 14 );
   String macPartTwo = mac.substring( 15 );
-  ssid = ssidPrefix + macPartOne + macPartTwo; // "appideas-" followed by the last 4 characters of the device MAC address
+  ssid = ssidPrefix + macPartOne + macPartTwo; // "b2prototech-" followed by the last 4 characters of the device MAC address
   
   WiFi.softAP( ssid.c_str() );
   softIP = WiFi.softAPIP().toString();
@@ -861,23 +862,22 @@ String getNetworkStatus()
 {
   String returnValue = "";
 
-  StaticJsonBuffer<1024> jsonBuffer;
-  JsonObject& root = jsonBuffer.createObject();
+  StaticJsonDocument<1024> doc;
   if( wifiConnected )
   {
-    root["soft"] = "disconnected";
-    root["hard"] = "connected";
-    root["ip"] = WiFi.localIP().toString();
+    doc["soft"] = "disconnected";
+    doc["hard"] = "connected";
+    doc["ip"] = WiFi.localIP().toString();
   }
   else
   {
-    root["soft"] = "connected";
-    root["hard"] = "disconnected";
-    root["ip"] = softIP;
+    doc["soft"] = "connected";
+    doc["hard"] = "disconnected";
+    doc["ip"] = softIP;
   }
-  root["ssid"] = ssid;
+  doc["ssid"] = ssid;
 
-  root.printTo( returnValue );
+  serializeJson(doc, returnValue);
 
   return returnValue;
 }
@@ -893,13 +893,12 @@ String getStatus()
 {
   String returnValue = "";
 
-  StaticJsonBuffer<1024> jsonBuffer;
-  JsonObject& root = jsonBuffer.createObject();
+  StaticJsonDocument<1024> doc;
 
-  JsonArray& fv = root.createNestedArray( "firstvalues" );
-  JsonArray& fr = root.createNestedArray( "firstratios" );
-  JsonArray& sv = root.createNestedArray( "secondvalues" );
-  JsonArray& sr = root.createNestedArray( "secondratios" );
+  JsonArray fv = doc.createNestedArray( "firstvalues" );
+  JsonArray fr = doc.createNestedArray( "firstratios" );
+  JsonArray sv = doc.createNestedArray( "secondvalues" );
+  JsonArray sr = doc.createNestedArray( "secondratios" );
 
   fv.add( getLevelForColor( "first", "red" ) );
   fv.add( getLevelForColor( "first", "green" ) );
@@ -921,7 +920,7 @@ String getStatus()
   sr.add( getRatioForColor( "second", "blue" ) );
   sr.add( getRatioForColor( "second", "white" ) );
 
-  root.printTo( returnValue );
+  serializeJson(doc, returnValue);
 
   return returnValue;
 }
@@ -1090,7 +1089,7 @@ void wipeSettings()
     int offset = 0;
   } clearSettings;
 
-  strcpy( clearSettings.ssid, "appideas-changeme" );
+  strcpy( clearSettings.ssid, "b2prototech-changeme" );
   strcpy( clearSettings.pass, "apideas-changeme" );
 
   uint addr = 0;
