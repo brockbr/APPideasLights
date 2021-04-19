@@ -6,6 +6,14 @@
 #include <ArduinoJson.h>
 #include <EEPROM.h>
 #include <ArduinoOTA.h>
+#include <SPI.h>
+#include <Wire.h>
+
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+
+Adafruit_SSD1306* display = NULL;
 
 /**
  * A sketch to control two strings of RGBW LED lights from one ESP8266.
@@ -22,7 +30,7 @@
 
 // Setup a wireless access point so the user can be prompted to connect to a network
 String  ssidPrefix = "b2prototech-";
-int serverPort = 5050;
+int serverPort = 80;
 String ssid = "";
 String softIP  = "";
 bool wifiConnected = false;
@@ -56,16 +64,16 @@ WiFiUDP udp;
 
 
 // Pin mapping for the first string of lights. Pins D0 - D3
-#define WHITE_LED_FIRST     16
-#define BLUE_LED_FIRST      5
-#define RED_LED_FIRST       4
-#define GREEN_LED_FIRST     0
+//#define WHITE_LED_FIRST     16
+//#define BLUE_LED_FIRST      5
+//#define RED_LED_FIRST       4
+//#define GREEN_LED_FIRST     0
 
 // Second string of lights. Pins D5 - D8
-#define WHITE_LED_SECOND     14
-#define BLUE_LED_SECOND      12
-#define RED_LED_SECOND       13
-#define GREEN_LED_SECOND     15
+#define RED_LED     14
+#define BLUE_LED    12
+#define WHITE_LED   13
+#define GREEN_LED   15
 
 int maxBrightness = 1024;
 int offBrightness = 0;
@@ -110,6 +118,74 @@ struct StoredSettings
     int offset = 0;
   } romSettings;
 
+
+bool validDisplay()
+{
+  if(display == NULL){
+    Serial.println("No display configured!");
+    return false;
+  }
+  
+  return true;
+}
+
+void writeStringToDisplay(const char* message, bool clearFirst = true, float lineNumber = 3.0)
+{
+  if(validDisplay()){
+    if(clearFirst) display->clearDisplay();
+    display->setTextSize(1);
+    display->setTextColor(WHITE);
+    display->setCursor(0, (int)(8.0 * lineNumber));
+    display->println(message);
+    display->display();
+  }
+}
+
+void writeStringToDisplay(String msg, bool clearFirst = true, float lineNumber = 3.0)
+{
+  writeStringToDisplay(msg.c_str(), clearFirst, lineNumber);
+}
+
+void writeStringToDisplay(String msg, String additionalMsg, bool clearFirst = true, float lineNumber = 3.0)
+{
+  writeStringToDisplay((msg + additionalMsg).c_str(), clearFirst, lineNumber);
+}
+
+void setupDisplay()
+{
+  
+  display = new Adafruit_SSD1306(128, 64);
+  // Initialize with the I2C default display address of 0x3C
+  display->begin(SSD1306_SWITCHCAPVCC, 0x3C);
+  
+  display->clearDisplay();
+}
+
+bool dnsUp = false;
+MDNSResponder mdns;
+
+void setupMDNS(String ipAddress)
+{
+  
+  //writeStringToDisplay("Setting DNS...", true, 4.5);
+  String fullMac = WiFi.macAddress();
+  fullMac.replace(":", "");
+  
+  if (!mdns.begin((String("b2leds-") + fullMac).c_str())) {
+    Serial.println("Error setting up MDNS responder!");
+    //writeStringToDisplay("DNS Failed", false, 4.5);
+    //while (1) {
+    //  delay(1000);
+    //}
+    return;
+  }
+  
+  Serial.println("mDNS responder started");  
+  writeStringToDisplay("DNS up", false, 4.5);
+  mdns.addService("http", "tcp", 80);
+  dnsUp = true;
+}
+
 /**
  * Run on device power-on
  * 
@@ -118,36 +194,52 @@ struct StoredSettings
  */
 void setup() 
 {
+  setupDisplay();
+
   Serial.begin( 57600 );
   delay( 100 );
+  
+  display->clearDisplay();
+  writeStringToDisplay("Starting...");
+  delay(500);
+  
+//  Prepare the pins to fire
+//  pinMode( WHITE_LED_FIRST, OUTPUT );
+//  pinMode( BLUE_LED_FIRST, OUTPUT );
+//  pinMode( RED_LED_FIRST, OUTPUT );
+//  pinMode( GREEN_LED_FIRST, OUTPUT );
 
-  // Prepare the pins to fire
-  pinMode( WHITE_LED_FIRST, OUTPUT );
-  pinMode( BLUE_LED_FIRST, OUTPUT );
-  pinMode( RED_LED_FIRST, OUTPUT );
-  pinMode( GREEN_LED_FIRST, OUTPUT );
+  
+  writeStringToDisplay("Setting pin modes...");
+  pinMode( WHITE_LED, OUTPUT );
+  pinMode( BLUE_LED, OUTPUT );
+  pinMode( RED_LED, OUTPUT );
+  pinMode( GREEN_LED, OUTPUT );
 
-  pinMode( WHITE_LED_SECOND, OUTPUT );
-  pinMode( BLUE_LED_SECOND, OUTPUT );
-  pinMode( RED_LED_SECOND, OUTPUT );
-  pinMode( GREEN_LED_SECOND, OUTPUT );
-
+ 
   // uncomment the line below to erase your stored network credentials when the device powers on
   //wipeSettings();
-  
+
   // Check to see if we have stored network credentials already
   if( !haveNetworkCredentials() )
   {
     // Start the local access point
-    wipeSettings();
+    writeStringToDisplay("No creds - Starting AP...");
+    //wipeSettings();
     startSoftAP();
   }
   else // Attempt to connect to the local network based on stored credentials
   {
     StoredSettings deviceSettings = getStoredSettings();
+    writeStringToDisplay(String("Connecting to: "), String(deviceSettings.ssid));
+
     connectToWifi( String( deviceSettings.ssid ), String( deviceSettings.pass ) );
+    writeStringToDisplay(String("Connected: "), String(deviceSettings.ssid));
+    
+    writeStringToDisplay(WiFi.localIP().toString(), false, 4.5);
   }
   // Start the web server and get ready to handle incoming requests
+  setupMDNS(WiFi.localIP().toString());
   startWebServer();
 
   // turn all the lights on when the ESP first powers on
@@ -215,18 +307,10 @@ void turnOff( String whichPosition )
  */
 void setColorToLevel( String whichPosition, String color, int level ) 
 { 
-  int redPin = RED_LED_FIRST;
-  int greenPin = GREEN_LED_FIRST;
-  int bluePin = BLUE_LED_FIRST;
-  int whitePin = WHITE_LED_FIRST;
-
-  if( whichPosition == "second" )
-  {
-    redPin = RED_LED_SECOND;
-    greenPin = GREEN_LED_SECOND;
-    bluePin = BLUE_LED_SECOND;
-    whitePin = WHITE_LED_SECOND;
-  }
+  int redPin = RED_LED;
+  int greenPin = GREEN_LED;
+  int bluePin = BLUE_LED;
+  int whitePin = WHITE_LED;
   
   if( color == "red" )
   {
@@ -276,15 +360,51 @@ void setColorToLevel( String whichPosition, String color, int level )
   }
 }
 
-/**
- * Run while the sketch is active
- * 
- * @return void
- * @author costmo
- * @since  20180902
- */
+/*
+const int broadcastPort = localPort;
+
+void sendUDP(String string) 
+{
+  Serial.print(">>> sendUDP : ");
+  Serial.println(string);
+
+  // convert string to char array
+  char msg[255]; memset(msg, 0, 255);
+  string.toCharArray(msg, 255);
+
+  IPAddress broadcastIP = WiFi.localIP();
+
+  //broadcastIP[0] = 255;
+  //broadcastIP[1] = 255;
+  //broadcastIP[2] = 255;
+  broadcastIP[3] = 255;
+  
+  udp.beginPacketMulticast(broadcastIP, broadcastPort, WiFi.localIP());
+  //udp.beginPacket(broadcastIP, broadcastPort);
+  udp.print(msg);
+  udp.endPacket();
+}
+
+#define ANNOUNCE_DELAY 1000
+unsigned long lastAnnounce = 0;
+
+void checkAnnounce()
+{
+  // Send a udp packet to announce our IP address every ANNOUNCE_DELAY seconds
+  if(millis() - lastAnnounce > ANNOUNCE_DELAY){
+    Serial.println("Sending announce...");
+    lastAnnounce = millis();
+//    sendUDP(String("B2: ") + WiFi.localIP().toString() + String(" ") + String(millis()));
+    sendUDP(String(millis()));
+  }
+}
+*/
+
 void loop() 
 {
+  //checkAnnounce();
+  if(dnsUp) mdns.update();
+  
   // Listen for API requests
   server.handleClient();
   
@@ -465,8 +585,10 @@ void startWebServer()
   server.on( "/network-status", handleNetworkStatus );
   server.on( "/status", handleStatus );
   server.on( "/control", handleControl );
+  server.on( "/colorset", handleColorset );
   server.on( "/rollcall", handleRollCall );
   server.begin();
+
 }
 
 /**
@@ -494,7 +616,7 @@ void connectToWifi( String wifiSSID, String wifiPassword )
       // Reset EEPROM values and go into AP mode if the connection hasn't been established for a period of time. Default: 30 seconds
       if( attemptCount > MAX_WIFI_RETRIES )
       {
-        wipeSettings();
+        //wipeSettings();
         startSoftAP();
         return;
       }
@@ -506,7 +628,7 @@ void connectToWifi( String wifiSSID, String wifiPassword )
   printWifiStatus();
   
   // Get over-the-air updates setup and ready
-  initOta();
+  //initOta();
 }
 
 /**
@@ -602,13 +724,31 @@ float getRatioForColor( String whichPosition, String color )
   return (float) ((float)currentValue / (float)1024);
 }
 
-/**
- * Handles API requests to control lights
- * 
- * @return void
- * @author costmo
- * @since  20180902
- */
+void handleColorset()
+{
+  int colorRed = server.arg( "red" ).toInt();
+  int colorGreen = server.arg( "green" ).toInt();
+  int colorBlue = server.arg( "blue" ).toInt();
+
+  float ratioRed = ((float)colorRed / (float)100);
+  float ratioGreen = ((float)colorGreen / (float)100);
+  float ratioBlue = ((float)colorBlue / (float)100);
+
+  int requestLevelRed = ceil( ratioRed * maxBrightness );
+  int requestLevelGreen = ceil( ratioGreen * maxBrightness );
+  int requestLevelBlue = ceil( ratioBlue * maxBrightness );
+
+  setColorToLevel( "first", "red", requestLevelRed );
+  setColorToLevel( "first", "green", requestLevelGreen );
+  setColorToLevel( "first", "blue", requestLevelBlue );
+
+  delay( 50 ); // give the web server a small amount of time to buffer and send
+
+  sendBlank();
+  server.send( 200, "text/html", "" ); // see if we can improve response times a little bit
+  
+}
+
 void handleControl()
 {
   // parse the incoming request and do the work
@@ -1096,44 +1236,4 @@ void wipeSettings()
   EEPROM.begin( 512 );
   EEPROM.put( addr, clearSettings );
   EEPROM.end();
-}
-
-void initOta()
-{
-  ArduinoOTA.onStart( []() 
-  {
-    String type;
-    if( ArduinoOTA.getCommand() == U_FLASH )
-    {
-      type = "sketch";
-    }
-    else // U_SPIFFS
-    {
-      type = "filesystem";
-    }
-
-    // NOTE: if updating SPIFFS this would be the place to unmount SPIFFS using SPIFFS.end()
-    Serial.println( "Start updating " + type );
-  });
-  
-  ArduinoOTA.onEnd( []() 
-  {
-    Serial.println( "\nEnd" );
-  });
-  
-  ArduinoOTA.onProgress( [](unsigned int progress, unsigned int total ) 
-  {
-    Serial.printf( "Progress: %u%%\r", (progress / (total / 100)) );
-  });
-  
-  ArduinoOTA.onError( []( ota_error_t error ) 
-  {
-    Serial.printf( "Error[%u]: ", error );
-    if( error == OTA_AUTH_ERROR) { Serial.println( "Auth Failed" ); }
-    else if(error == OTA_BEGIN_ERROR) { Serial.println("Begin Failed"); }
-    else if(error == OTA_CONNECT_ERROR) { Serial.println("Connect Failed"); }
-    else if(error == OTA_RECEIVE_ERROR) { Serial.println("Receive Failed"); }
-    else if(error == OTA_END_ERROR) { Serial.println("End Failed"); }
-  });
-  ArduinoOTA.begin();
 }
