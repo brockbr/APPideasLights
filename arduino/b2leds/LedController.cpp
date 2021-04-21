@@ -14,7 +14,7 @@ LedController::LedController(int red, int green, int blue)
     BLUE_LED = blue;
 }
 
-int LedController::getLevelForColor( String whichPosition, String color )
+int LedController::getLevelForColor(String color )
 {
   if( color == RED )
   {
@@ -35,14 +35,15 @@ int LedController::getLevelForColor( String whichPosition, String color )
 }
 
 
-float LedController::getRatioForColor( String whichPosition, String color )
+float LedController::getRatioForColor(String color )
 {
-  int  currentValue = getLevelForColor( whichPosition, color );
+  int  currentValue = getLevelForColor( color );
   return (float) ((float)currentValue / (float)1024);
 }
 
 void LedController::colorSet(int red, int green, int blue)
 {
+  Serial.printf("Color Setting - Red: %d, Green %d, Blue %d\n", red, green, blue);
   float ratioRed = ((float)red / (float)100);
   float ratioGreen = ((float)green / (float)100);
   float ratioBlue = ((float)blue / (float)100);

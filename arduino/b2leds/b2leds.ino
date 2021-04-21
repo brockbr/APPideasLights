@@ -63,6 +63,7 @@ void setupMDNS(String ipAddress)
 
 void setup() 
 {
+  writeStringToDisplay("Starting...");
   setupDisplay();
 
   Serial.begin( 57600 );
@@ -71,7 +72,6 @@ void setup()
   initWebserver(&ledController);
   
   clearDisplay();
-  writeStringToDisplay("Starting...");
   delay(500);
   
   writeStringToDisplay("Setting pin modes...");
@@ -104,8 +104,6 @@ void setup()
 
   ledController.turnOff();
 }
-
-
 
 
 void loop() 

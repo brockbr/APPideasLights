@@ -10,10 +10,11 @@
 class LedController
 {
   public:
+  static const int FrameSize = 12;
   LedController(int redPin, int greenPin, int bluePin);
     
-  int getLevelForColor( String whichPosition, String color );
-  float getRatioForColor( String whichPosition, String color );
+  int getLevelForColor( String color );
+  float getRatioForColor( String color );
   void colorSet(int red = -1, int green = -1, int blue = -1);
   void setColorToLevel(String color, int level);
 

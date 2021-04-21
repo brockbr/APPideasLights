@@ -52,13 +52,6 @@ void serverHandleClient()
   server.handleClient();
 }
 
-/**
- * Stores the input settings to EEPROM
- * 
- * @return void
- * @author costmo
- * @since  20180929
- */
 void saveSettings( String ssid, String password, int offset )
 {
   uint addr = 0;
@@ -72,13 +65,6 @@ void saveSettings( String ssid, String password, int offset )
   EEPROM.end();
 }
 
-/**
- * Retrieves stored settings from EEPROM so that WiFi setup does not have to be repeated on every power cycle
- * 
- * @return struct
- * @author costmo
- * @since  20180929
- */
 StoredSettings getStoredSettings()
 {
   uint addr = 0;
@@ -88,16 +74,6 @@ StoredSettings getStoredSettings()
   return romSettings;
 }
 
-/**
- * Removes all the input settings from EEPROM
- * 
- * The ESP8266 EEPROM wasn't working the same as Arduino for blanking stored values, so we
- *   set a known "bad" value to make the network credentials be invalid
- * 
- * @return void
- * @author costmo
- * @since  20180929
- */
 void wipeSettings()
 {
   struct StoredSettings
@@ -162,7 +138,7 @@ void handleConnect()
   }
 
   String newIp = WiFi.localIP().toString();
-  server.send( 200, "text/html", redirect( newIp ) ); // Redirecting really doesn't work since the device will already be on a different network. We can still try, tough.
+  server.send( 200, "text/html", redirect( newIp ) );
 
   // Get and show the time
   Serial.println( "Starting UDP" );
@@ -201,14 +177,23 @@ void handleColorset()
 
 }
 
+void handleSetAnimation()
+{
+  String values = server.arg("values");
+
+  if(values != NULL && values.length() > 0 && (values.length() % LedController::FrameSize) == 0){
+    
+  }
+}
 
 void startWebServer()
 {
-  server.on( "/", handleRoot );
-  server.on( "/connect", handleConnect );
-  server.on( "/network-status", handleNetworkStatus );
-  server.on( "/status", handleStatus );
-  server.on( "/colorset", handleColorset );
+  server.on("/", handleRoot);
+  server.on("/connect", handleConnect);
+  server.on("/network-status", handleNetworkStatus);
+  server.on("/status", handleStatus);
+  server.on("/colorset", handleColorset);
+  server.on("/setanimation", handleSetAnimation);
 
   server.begin();
 
@@ -266,13 +251,6 @@ void printWifiStatus()
  
 
 
-/**
- * Get the current time from an NTP server
- * 
- * @return String
- * @author costmo
- * @since  20180902
- */
 String getTime()
 {
   
@@ -367,17 +345,6 @@ String getTime()
   return returnValue;
 }
 
-/**
- * Writes all time components to member variables for easier parsing and display.
- * 
- * This should only be run immediately following a call to getTime()
- * 
- * TODO: Make minutes and seconds < 10 zero-padded
- * 
- * @return void
- * @author costmo
- * @since  20180902
- */
 void timeToVars()
 {
   int separator1 = fullTime.indexOf( ' ' );
@@ -438,14 +405,6 @@ void timeToVars()
   intTime = timeString.toInt();
 }
 
- /**
- * Send an NTP request to the time server at the given address
- * 
- * @return long
- * @author costmo
- * @since  20180902
- * @param  IPAddress    address       A pointer to the IP address of the NTP server
- */
 unsigned long sendNTPpacket( IPAddress& address )
 {
   //Serial.println("sending NTP packet...");
@@ -471,13 +430,6 @@ unsigned long sendNTPpacket( IPAddress& address )
 }
 
 
-/**
- * Whether or not we have stored network credentials. Will return false of the stored SSID is "b2prototech-changeme"
- * 
- * @return bool
- * @author costmo
- * @since  20180929
- */
 bool haveNetworkCredentials()
 {
   StoredSettings deviceSettings = getStoredSettings();
@@ -492,13 +444,7 @@ bool haveNetworkCredentials()
 
   return true;
 }
-/**
- * Gets the network status and returns info as a JSON-encoded string
- * 
- * @return String
- * @author costmo
- * @since  20180913
- */
+
 String getNetworkStatus()
 {
   String returnValue = "";
@@ -523,52 +469,29 @@ String getNetworkStatus()
   return returnValue;
 }
 
-/**
- * Gets the status of each color on each string of lights and returns info as a JSON-encoded string
- * 
- * @return String
- * @author costmo
- * @since  20180913
- */
 String getStatus()
 {
   String returnValue = "";
 
   StaticJsonDocument<1024> doc;
 
-  JsonArray fv = doc.createNestedArray( "firstvalues" );
-  JsonArray fr = doc.createNestedArray( "firstratios" );
-  JsonArray sv = doc.createNestedArray( "secondvalues" );
-  JsonArray sr = doc.createNestedArray( "secondratios" );
+  JsonArray v = doc.createNestedArray( "values" );
+  JsonArray r = doc.createNestedArray( "ratios" );
 
-  fv.add( pLedController->getLevelForColor( "first", RED ) );
-  fv.add( pLedController->getLevelForColor( "first", GREEN ) );
-  fv.add( pLedController->getLevelForColor( "first", BLUE ) );
+  v.add( pLedController->getLevelForColor(RED));
+  v.add( pLedController->getLevelForColor(GREEN));
+  v.add( pLedController->getLevelForColor(BLUE));
 
-  fr.add( pLedController->getRatioForColor( "first", RED ) );
-  fr.add( pLedController->getRatioForColor( "first", GREEN ) );
-  fr.add( pLedController->getRatioForColor( "first", BLUE ) );
-
-  sv.add( pLedController->getLevelForColor( "second", RED ) );
-  sv.add( pLedController->getLevelForColor( "second", GREEN ) );
-  sv.add( pLedController->getLevelForColor( "second", BLUE ) );
-
-  sr.add( pLedController->getRatioForColor( "second", RED ) );
-  sr.add( pLedController->getRatioForColor( "second", GREEN ) );
-  sr.add( pLedController->getRatioForColor( "second", BLUE ) );
+  r.add( pLedController->getRatioForColor(RED));
+  r.add( pLedController->getRatioForColor(GREEN));
+  r.add( pLedController->getRatioForColor(BLUE));
 
   serializeJson(doc, returnValue);
 
   return returnValue;
 }
 
-/**
- * Gets the SSIS and IP address of the local access point
- * 
- * @return String
- * @author costmo
- * @since  20180913
- */
+
 String getSoftAPStatus()
 {
   String returnValue = "\n";
@@ -577,14 +500,6 @@ String getSoftAPStatus()
 
   return returnValue;
 }
-
-/**
- * HTML form for connecting to a WiFi network
- * 
- * @return const String
- * @author costmo
- * @since  20180913
- */
 const String connectionHtml()
 {
   const String returnValue =
@@ -616,13 +531,6 @@ const String connectionHtml()
   return returnValue;
 }
 
-/**
- * HTML to show when a user is already connected and is on a page that offers or processes connections
- * 
- * @return const String
- * @author costmo
- * @since  20180913
- */
 const String connectedHtml()
 {
   const String returnValue =
@@ -645,15 +553,6 @@ const String connectedHtml()
   return returnValue;
 }
 
-/**
- * Attempt to redirect users after successful attempt to connect to a WiFi network
- * 
- * This doesn't currently work since the user is disconnected from the ESP prior to this being an option to be offered
- * 
- * @return String
- * @author costmo
- * @since  20180902
- */
 String redirect( String newIP )
 {
   String returnValue =
